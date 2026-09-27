@@ -1,0 +1,108 @@
+{
+  "vertex": "primordial:core/entity_outline_effect",
+  "fragment": "primordial:core/entity_outline_effect",
+  "samplers": [
+    {
+      "name": "Sampler0"
+    },
+    {
+      "name": "Sampler1"
+    }
+  ],
+  "attributes": [
+    "Position",
+    "Color"
+  ],
+  "uniforms": [
+    {
+      "name": "ModelViewMat",
+      "type": "matrix4x4",
+      "count": 16,
+      "values": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "name": "ProjMat",
+      "type": "matrix4x4",
+      "count": 16,
+      "values": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "name": "ScreenSize",
+      "type": "float",
+      "count": 2,
+      "values": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "name": "OutlineSize",
+      "type": "float",
+      "count": 1,
+      "values": [
+        2
+      ]
+    },
+    {
+      "name": "GlowRadius",
+      "type": "float",
+      "count": 1,
+      "values": [
+        5
+      ]
+    },
+    {
+      "name": "GlowStrength",
+      "type": "float",
+      "count": 1,
+      "values": [
+        0.55
+      ]
+    },
+    {
+      "name": "OutlineColor",
+      "type": "float",
+      "count": 4,
+      "values": [
+        0.5,
+        0.65,
+        1,
+        1
+      ]
+    }
+  ]
+}

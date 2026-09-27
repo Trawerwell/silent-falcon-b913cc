@@ -1,0 +1,36 @@
+{
+  "accessWidener": "primordial.accesswidener",
+  "schemaVersion": 1,
+  "id": "primordial",
+  "version": "3.0.14",
+  "name": "Primordial",
+  "description": "https://github.com/CollapseLoader/DeltaClient",
+  "authors": [
+    "dezzDev",
+    "fruz"
+  ],
+  "contact": {
+    "homepage": "https://github.com/CollapseLoader/DeltaClient",
+    "sources": "https://github.com/CollapseLoader/DeltaClient"
+  },
+  "license": "Minecraft EULA",
+  "icon": "assets/primordial/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "platform.Initializer"
+    ]
+  },
+  "mixins": [
+    "primordial.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": "\u003e\u003d0.16.5",
+    "minecraft": "~1.21.4",
+    "java": "\u003e\u003d21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
+}

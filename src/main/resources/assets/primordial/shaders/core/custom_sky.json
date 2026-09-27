@@ -1,0 +1,19 @@
+{
+  "vertex": "primordial:core/custom_sky",
+  "fragment": "primordial:core/custom_sky",
+  "samplers": [],
+  "uniforms": [
+    { "name": "Forward", "type": "float", "count": 3, "values": [0.0, 0.0, -1.0] },
+    { "name": "Right", "type": "float", "count": 3, "values": [1.0, 0.0, 0.0] },
+    { "name": "Up", "type": "float", "count": 3, "values": [0.0, 1.0, 0.0] },
+    { "name": "Aspect", "type": "float", "count": 1, "values": [1.0] },
+    { "name": "TanHalfFov", "type": "float", "count": 1, "values": [0.7] },
+    { "name": "Time", "type": "float", "count": 1, "values": [0.0] },
+    { "name": "Style", "type": "float", "count": 1, "values": [0.0] },
+    { "name": "Brightness", "type": "float", "count": 1, "values": [1.0] },
+    { "name": "GlowStrength", "type": "float", "count": 1, "values": [1.0] },
+    { "name": "NebulaColor1", "type": "float", "count": 3, "values": [0.23, 0.13, 0.35] },
+    { "name": "NebulaColor2", "type": "float", "count": 3, "values": [0.16, 0.48, 0.62] },
+    { "name": "NebulaColor3", "type": "float", "count": 3, "values": [0.62, 0.30, 0.52] }
+  ]
+}
