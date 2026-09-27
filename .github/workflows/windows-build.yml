@@ -41,11 +41,22 @@ jobs:
         shell: pwsh
         run: .\gradlew.bat build --no-daemon --stacktrace
 
-      - name: Upload compiled JAR files
-        if: always()
+      - name: Prepare Primordial.jar
+        shell: pwsh
+        run: |
+          $jar = Get-ChildItem "build/libs/*.jar" |
+            Where-Object { $_.Name -notmatch "-(sources|dev|javadoc)\.jar$" } |
+            Select-Object -First 1
+          if (-not $jar) {
+            throw "Compiled mod JAR was not found in build/libs"
+          }
+          New-Item -ItemType Directory -Force -Path "output" | Out-Null
+          Copy-Item $jar.FullName "output/Primordial.jar"
+
+      - name: Upload Primordial.jar
         uses: actions/upload-artifact@v4
         with:
-          name: primordial-windows-build
-          path: build/libs/*.jar
-          if-no-files-found: warn
+          name: Primordial
+          path: output/Primordial.jar
+          if-no-files-found: error
           retention-days: 14
