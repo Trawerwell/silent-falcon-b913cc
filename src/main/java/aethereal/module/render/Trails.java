@@ -118,6 +118,7 @@ public final class Trails extends Module {
             trails.clear(); trailParticles.clear(); lastWorld = mc.world;
         }
 
+        normalizeLegacyStyles();
         long now = System.currentTimeMillis();
         if (enabled("Локальный игрок")) sample(mc.player, Target.LOCAL_PLAYER, now);
         if (enabled("Другие игроки")) {
@@ -153,6 +154,16 @@ public final class Trails extends Module {
         return value != null && value.c();
     }
 
+    private void normalizeLegacyStyles() {
+        if (!playerStyle.l("Лента") && !playerStyle.l("Частицы"))
+            playerStyle.a("Лента");
+        if (projectileStyle.l("Светящаяся линия"))
+            projectileStyle.a("Линия");
+        else if (!projectileStyle.l("Лента") && !projectileStyle.l("Частицы")
+                && !projectileStyle.l("Линия"))
+            projectileStyle.a("Линия");
+    }
+
     private void sample(Entity entity, Target target, long now) {
         Trail trail = trails.computeIfAbsent(entity.getId(), id -> new Trail(target));
         trail.target = target;
@@ -184,7 +195,7 @@ public final class Trails extends Module {
         int[] forms = enabledForms(profile.particles);
         if (forms.length == 0) return;
         boolean projectile = trail.target == Target.PROJECTILE;
-        double spacing = projectile ? 0.06 : 0.10;
+        double spacing = projectile ? 0.102 : 0.10;
         double next = spacing - trail.emissionCarry;
         int emitted = 0;
         ThreadLocalRandom random = ThreadLocalRandom.current();
@@ -437,9 +448,8 @@ public final class Trails extends Module {
             float alpha = appear * disappear * profile.opacity.c();
             if (alpha <= 0.002f) continue;
             int color = applyAlpha(profile.color.c(), alpha);
-            float pulse = 0.94f + 0.06f * (float) Math.sin(age * 0.012 + particle.rotationZ);
             result.add(new ParticleView(particle.position.subtract(camera), particle.form, particle.texture,
-                    color, particle.size * pulse, particle.rotationX, particle.rotationY, particle.rotationZ));
+                    color, particle.size, particle.rotationX, particle.rotationY, particle.rotationZ));
         }
         return result;
     }
