@@ -38,9 +38,8 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @ModuleRegister(name = "World Particles", description = "2D частицы, кубы и треугольники", category = Category.Render)
 public class WorldParticles extends Module {
-    private static final String[] FORMS = {"Спарк 1", "Спарк 2", "Спарк 3", "Сияние", "Доллар",
-            "Блум", "Свечение", "Снег", "Звезда", "Кубы", "Треугольники"};
-    private static final Identifier[] TEXTURES = new Identifier[9];
+    private static final String[] FORMS = {"Спарки", "Доллар", "Блум", "Снег", "Звезда", "Кубы", "Треугольники"};
+    private static final Identifier[] TEXTURES = new Identifier[8];
     private static final Identifier GLOW_TEXTURE = Identifier.of("primordial", "textures/particles/glow.png");
     private static final float[] GLOW_SCALES = {10.0f, 6.0f, 3.5f};
     private static final float[] GLOW_ALPHA = {0.06f, 0.14f, 0.25f};
@@ -51,16 +50,14 @@ public class WorldParticles extends Module {
     };
     private static final byte[][] TRIANGLE_EDGES = {{0,1}, {0,2}, {0,3}, {0,4}, {1,2}, {2,3}, {3,4}, {4,1}};
     static {
-        String[] names = {"spark_1", "spark_2", "spark_3", "sparkle", "dollar", "bloom", "glow", "snow", "star"};
+        String[] names = {"spark_1", "spark_2", "spark_3", "sparkle", "dollar", "bloom", "snow", "star"};
         for (int i = 0; i < names.length; i++)
             TEXTURES[i] = Identifier.of("primordial", "textures/particles/" + names[i] + ".png");
     }
 
     private final MultiModeSetting forms = new MultiModeSetting("Формы частиц",
-            new BooleanSetting("Спарк 1", false), new BooleanSetting("Спарк 2", false),
-            new BooleanSetting("Спарк 3", false), new BooleanSetting("Сияние", false),
-            new BooleanSetting("Доллар", false), new BooleanSetting("Блум", false),
-            new BooleanSetting("Свечение", false), new BooleanSetting("Снег", false),
+            new BooleanSetting("Спарки", true), new BooleanSetting("Доллар", false),
+            new BooleanSetting("Блум", false), new BooleanSetting("Снег", false),
             new BooleanSetting("Звезда", false), new BooleanSetting("Кубы", true),
             new BooleanSetting("Треугольники", false));
     private final ModeSetting animation = new ModeSetting("Анимация", "Падение", "Падение", "Разлёт");
@@ -95,7 +92,10 @@ public class WorldParticles extends Module {
         Iterator<Particle> iterator = particles.iterator();
         while (iterator.hasNext()) {
             Particle p = iterator.next();
-            if (!forms.a(p.form).c()) p.form = enabledForms[random.nextInt(enabledForms.length)];
+            if (!forms.a(p.form).c()) {
+                p.form = enabledForms[random.nextInt(enabledForms.length)];
+                p.texture = p.form == 0 ? random.nextInt(4) : textureForForm(p.form);
+            }
             if (!hasRoom(p.x, p.y, p.z)) { iterator.remove(); continue; }
             p.px = p.x; p.py = p.y; p.pz = p.z;
             if (falling) {
@@ -138,6 +138,7 @@ public class WorldParticles extends Module {
     private Particle spawn(ThreadLocalRandom random, boolean falling, int[] enabledForms) {
         Particle p = new Particle();
         p.form = enabledForms[random.nextInt(enabledForms.length)];
+        p.texture = p.form == 0 ? random.nextInt(4) : textureForForm(p.form);
         boolean found = false;
         for (int attempt = 0; attempt < 12; attempt++) {
             p.x = mc.player.getX() + random.nextDouble(-12.0, 12.0);
@@ -293,13 +294,14 @@ public class WorldParticles extends Module {
                 BufferRenderer.drawWithGlobalProgram(buffer.end());
             }
             RenderSystem.defaultBlendFunc();
-            for (int shape = 0; shape < 9; shape++) {
-                if (!containsForm(visible, shape)) continue;
-                RenderSystem.setShaderTexture(0, TEXTURES[shape]);
+            for (int texture = 0; texture < TEXTURES.length; texture++) {
+                if (!containsTexture(visible, texture)) continue;
+                RenderSystem.setShaderTexture(0, TEXTURES[texture]);
                 RenderSystem.setShader(ShaderProgramKeys.POSITION_TEX_COLOR);
-                BufferBuilder sprites = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE_COLOR);
+                BufferBuilder sprites = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS,
+                        VertexFormats.POSITION_TEXTURE_COLOR);
                 for (Visible v : visible) {
-                    if (v.p.form != shape) continue;
+                    if (v.p.texture != texture) continue;
                     matrices.push(); matrices.translate(v.x, v.y, v.z);
                     matrices.multiply(camera.getRotation());
                     matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(v.p.rz));
@@ -310,29 +312,30 @@ public class WorldParticles extends Module {
                 BufferRenderer.drawWithGlobalProgram(sprites.end());
             }
             RenderSystem.setShader(ShaderProgramKeys.POSITION_COLOR);
-            for (int shape = 9; shape <= 10; shape++) {
+            for (int shape = 5; shape <= 6; shape++) {
                 if (!containsForm(visible, shape)) continue;
                 BufferBuilder faces = Tessellator.getInstance().begin(
-                        shape == 9 ? VertexFormat.DrawMode.QUADS : VertexFormat.DrawMode.TRIANGLES,
+                        shape == 5 ? VertexFormat.DrawMode.QUADS : VertexFormat.DrawMode.TRIANGLES,
                         VertexFormats.POSITION_COLOR);
                 for (Visible v : visible) {
                     if (v.p.form != shape) continue;
                     matrices.push(); matrices.translate(v.x, v.y, v.z); rotate(matrices, v.p);
                     int face = (Math.round(v.alpha * 0.40f) << 24) | (baseColor & 0x00FFFFFF);
-                    if (shape == 9) cubeFaces(faces, matrices.peek().getPositionMatrix(), particleSize, face);
+                    if (shape == 5) cubeFaces(faces, matrices.peek().getPositionMatrix(), particleSize, face);
                     else triangleFaces(faces, matrices.peek().getPositionMatrix(), particleSize, face);
                     matrices.pop();
                 }
                 BufferRenderer.drawWithGlobalProgram(faces.end());
             }
-            if (containsForm(visible, 9) || containsForm(visible, 10)) {
+            if (containsForm(visible, 5) || containsForm(visible, 6)) {
                 RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE);
-                BufferBuilder edges = Tessellator.getInstance().begin(VertexFormat.DrawMode.DEBUG_LINES, VertexFormats.POSITION_COLOR);
+                BufferBuilder edges = Tessellator.getInstance().begin(VertexFormat.DrawMode.DEBUG_LINES,
+                        VertexFormats.POSITION_COLOR);
                 for (Visible v : visible) {
-                    if (v.p.form < 9) continue;
+                    if (v.p.form < 5) continue;
                     matrices.push(); matrices.translate(v.x, v.y, v.z); rotate(matrices, v.p);
                     int edgeColor = (v.alpha << 24) | (baseColor & 0x00FFFFFF);
-                    if (v.p.form == 9) cubeEdges(edges, matrices.peek().getPositionMatrix(), particleSize, edgeColor);
+                    if (v.p.form == 5) cubeEdges(edges, matrices.peek().getPositionMatrix(), particleSize, edgeColor);
                     else triangleEdges(edges, matrices.peek().getPositionMatrix(), particleSize, edgeColor);
                     matrices.pop();
                 }
@@ -347,6 +350,15 @@ public class WorldParticles extends Module {
     private static boolean containsForm(List<Visible> visible, int form) {
         for (Visible v : visible) if (v.p.form == form) return true;
         return false;
+    }
+
+    private static boolean containsTexture(List<Visible> visible, int texture) {
+        for (Visible v : visible) if (v.p.texture == texture) return true;
+        return false;
+    }
+
+    private static int textureForForm(int form) {
+        return form >= 1 && form <= 4 ? form + 3 : -1;
     }
 
     private static void rotate(MatrixStack matrices, Particle p) {
@@ -437,6 +449,6 @@ public class WorldParticles extends Module {
         double x,y,z,px,py,pz;
         float vx,vy,vz,rx,ry,rz,sx,sy,sz,phase,offset;
         float fade = 1.0f, previousFade = 1.0f;
-        int life,maxLife,form;
+        int life,maxLife,form,texture;
     }
 }
