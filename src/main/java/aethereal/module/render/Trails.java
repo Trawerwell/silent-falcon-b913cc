@@ -83,6 +83,7 @@ public final class Trails extends Module {
     private final MultiModeSetting projectileParticles = particleSetting("Снаряды: частицы", projectileStyle);
 
     private final Map<Integer, Trail> trails = new HashMap<>();
+    private final List<TrailParticle> trailParticles = new ArrayList<>();
     private Object lastWorld;
 
     public Trails() {
@@ -105,16 +106,16 @@ public final class Trails extends Module {
         return Identifier.of("primordial", "textures/particles/" + name + ".png");
     }
 
-    @Override public void b() { trails.clear(); lastWorld = null; super.b(); }
-    @Override public void c() { trails.clear(); lastWorld = null; super.c(); }
+    @Override public void b() { trails.clear(); trailParticles.clear(); lastWorld = null; super.b(); }
+    @Override public void c() { trails.clear(); trailParticles.clear(); lastWorld = null; super.c(); }
 
     @EventTarget
     public void onTick(TickEvent event) {
         if (mc.player == null || mc.world == null) {
-            trails.clear(); lastWorld = null; return;
+            trails.clear(); trailParticles.clear(); lastWorld = null; return;
         }
         if (lastWorld != mc.world) {
-            trails.clear(); lastWorld = mc.world;
+            trails.clear(); trailParticles.clear(); lastWorld = mc.world;
         }
 
         long now = System.currentTimeMillis();
@@ -137,6 +138,14 @@ public final class Trails extends Module {
             trail.points.removeIf(point -> now - point.created > lifetime);
             if (trail.points.isEmpty() && now - trail.lastSeen > lifetime) iterator.remove();
         }
+
+        Iterator<TrailParticle> particleIterator = trailParticles.iterator();
+        while (particleIterator.hasNext()) {
+            TrailParticle particle = particleIterator.next();
+            if (now - particle.created >= particle.lifetime) particleIterator.remove();
+            else particle.tick();
+        }
+        while (trailParticles.size() > 5000) trailParticles.remove(0);
     }
 
     private boolean enabled(String name) {
@@ -149,16 +158,76 @@ public final class Trails extends Module {
         trail.target = target;
         trail.lastSeen = now;
         Vec3d position = entity.getPos();
-        if (trail.points.isEmpty() || trail.points.get(trail.points.size() - 1).position.squaredDistanceTo(position) > 0.0025) {
+        if (trail.points.isEmpty()) {
             trail.points.add(new Point(position, now, ThreadLocalRandom.current().nextInt()));
+        } else {
+            Point previous = trail.points.get(trail.points.size() - 1);
+            if (previous.position.squaredDistanceTo(position) > 0.0025) {
+                Profile profile = profile(trail);
+                if (profile.style.l("Частицы"))
+                    emitUniformParticles(trail, previous.position, position, profile, now);
+                trail.points.add(new Point(position, now, ThreadLocalRandom.current().nextInt()));
+            }
         }
         int maximum = Math.max(16, Math.round(profile(trail).length.c() * 40.0f));
         while (trail.points.size() > maximum) trail.points.remove(0);
     }
 
+    private void emitUniformParticles(Trail trail, Vec3d start, Vec3d end, Profile profile, long now) {
+        Vec3d delta = end.subtract(start);
+        double distance = delta.length();
+        if (distance < 0.0001) return;
+        if (distance > 12.0) {
+            trail.emissionCarry = 0.0;
+            return;
+        }
+        int[] forms = enabledForms(profile.particles);
+        if (forms.length == 0) return;
+        boolean projectile = trail.target == Target.PROJECTILE;
+        double spacing = projectile ? 0.06 : 0.10;
+        double next = spacing - trail.emissionCarry;
+        int emitted = 0;
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        while (next <= distance && emitted < 128) {
+            double progress = next / distance;
+            Vec3d center = start.add(delta.multiply(progress));
+            spawnParticle(center, trail.target, profile, forms, now, random);
+            next += spacing;
+            emitted++;
+        }
+        trail.emissionCarry = (trail.emissionCarry + distance) % spacing;
+    }
+
+    private void spawnParticle(Vec3d center, Target target, Profile profile, int[] forms,
+                               long now, ThreadLocalRandom random) {
+        boolean projectile = target == Target.PROJECTILE;
+        int form = forms[random.nextInt(forms.length)];
+        int seed = random.nextInt();
+        int texture = textureIndex(form, seed);
+        double spread = projectile ? random.nextDouble(0.05, 0.18) : random.nextDouble(0.03, 0.09);
+        double angle = random.nextDouble(Math.PI * 2.0);
+        double vertical = projectile ? random.nextDouble(-spread, spread)
+                : random.nextDouble(0.18, 1.36);
+        Vec3d position = center.add(Math.cos(angle) * spread, vertical, Math.sin(angle) * spread);
+        Vec3d velocity = new Vec3d(random.nextDouble(-0.0025, 0.0025),
+                random.nextDouble(0.0005, 0.0030), random.nextDouble(-0.0025, 0.0025));
+        long lifetime = Math.max(250L, Math.round(profile.lifetime() * random.nextDouble(0.72, 1.18)));
+        float size = (projectile ? 0.095f : 0.14f) * random.nextFloat(0.82f, 1.18f);
+        trailParticles.add(new TrailParticle(position, velocity, target, form, texture, now, lifetime, size,
+                random.nextFloat(0.0f, 360.0f), random.nextFloat(0.0f, 360.0f),
+                random.nextFloat(0.0f, 360.0f), randomSpin(random, 1.0f, 3.2f),
+                randomSpin(random, 1.0f, 3.2f), randomSpin(random, 1.5f, 4.5f)));
+    }
+
+    private static float randomSpin(ThreadLocalRandom random, float minimum, float maximum) {
+        float speed = random.nextFloat(minimum, maximum);
+        return random.nextBoolean() ? speed : -speed;
+    }
+
     @EventTarget
     public void onDraw(DrawEvent event) {
-        if (!event.c() || mc.player == null || mc.world == null || trails.isEmpty()) return;
+        if (!event.c() || mc.player == null || mc.world == null
+                || (trails.isEmpty() && trailParticles.isEmpty())) return;
         Camera camera = mc.gameRenderer.getCamera();
         Vec3d cameraPosition = camera.getPos();
         MatrixStack matrices = event.h();
@@ -202,12 +271,19 @@ public final class Trails extends Module {
             for (int i = 1; i < points.size(); i++) {
                 Point previous = points.get(i - 1), current = points.get(i);
                 Vec3d a = previous.position.subtract(camera), b = current.position.subtract(camera);
-                int ca = color(previous, now, p, 0.62f), cb = color(current, now, p, 0.62f);
-                ribbon.vertex(matrix, (float) a.x, (float) a.y + bottom, (float) a.z).color(ca);
-                ribbon.vertex(matrix, (float) b.x, (float) b.y + bottom, (float) b.z).color(cb);
-                ribbon.vertex(matrix, (float) b.x, (float) b.y + bottom + height, (float) b.z).color(cb);
-                ribbon.vertex(matrix, (float) a.x, (float) a.y + bottom + height, (float) a.z).color(ca);
-                vertices += 4;
+                int ca = color(previous, now, p, 0.90f), cb = color(current, now, p, 0.90f);
+                Vec3d horizontal = new Vec3d(b.x - a.x, 0.0, b.z - a.z);
+                if (horizontal.lengthSquared() < 1.0e-8) continue;
+                Vec3d side = new Vec3d(-horizontal.z, 0.0, horizontal.x).normalize().multiply(0.25);
+                Vec3d al = a.add(side).add(0, bottom, 0), ar = a.subtract(side).add(0, bottom, 0);
+                Vec3d bl = b.add(side).add(0, bottom, 0), br = b.subtract(side).add(0, bottom, 0);
+                Vec3d alt = al.add(0, height, 0), art = ar.add(0, height, 0);
+                Vec3d blt = bl.add(0, height, 0), brt = br.add(0, height, 0);
+                coloredQuad(ribbon, matrix, al, bl, blt, alt, ca, cb, cb, ca);
+                coloredQuad(ribbon, matrix, br, ar, art, brt, cb, ca, ca, cb);
+                coloredQuad(ribbon, matrix, alt, blt, brt, art, ca, cb, cb, ca);
+                coloredQuad(ribbon, matrix, ar, br, bl, al, ca, cb, cb, ca);
+                vertices += 16;
             }
         }
         if (vertices > 0) BufferRenderer.drawWithGlobalProgram(ribbon.end());
@@ -305,9 +381,7 @@ public final class Trails extends Module {
                                      long now, boolean projectile) {
         Profile p = projectile ? projectileProfile() : playerProfile();
         if (!p.style.l("Частицы")) return;
-        int[] forms = enabledForms(p.particles);
-        if (forms.length == 0) return;
-        List<ParticleView> views = collectParticles(cameraPosition, now, projectile, p, forms);
+        List<ParticleView> views = collectParticles(cameraPosition, now, projectile, p);
         if (views.isEmpty()) return;
 
         if (p.glow.c() > 0.0f) {
@@ -339,7 +413,7 @@ public final class Trails extends Module {
                 if (view.texture != textureIndex) continue;
                 matrices.push(); matrices.translate(view.position.x, view.position.y, view.position.z);
                 matrices.multiply(camera.getRotation());
-                matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(view.rotation));
+                matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(view.rotationZ));
                 appendSprite(sprites, matrices.peek().getPositionMatrix(), view.size, view.color);
                 matrices.pop();
             }
@@ -350,52 +424,24 @@ public final class Trails extends Module {
     }
 
     private List<ParticleView> collectParticles(Vec3d camera, long now, boolean projectile,
-                                                Profile profile, int[] forms) {
+                                                Profile profile) {
         List<ParticleView> result = new ArrayList<>();
-        for (Trail trail : trails.values()) {
-            if (!matches(trail, projectile) || !visible(trail)) continue;
-            for (int i = 0; i < trail.points.size(); i += 2) {
-                Point point = trail.points.get(i);
-                int copies = projectile ? 3 + Math.floorMod(point.seed, 4) : 1;
-                float ageMillis = now - point.created;
-                float life = 1.0f - Math.min(1.0f, ageMillis / profile.lifetime());
-                float appear = smooth(Math.min(1.0f, ageMillis / 220.0f));
-                if (life <= 0.01f || appear <= 0.001f) continue;
-                for (int copy = 0; copy < copies; copy++) {
-                    int seed = mix(point.seed, copy);
-                    int form = forms[Math.floorMod(seed, forms.length)];
-                    int texture = textureIndex(form, seed);
-                    double phase = seed * 0.000137 + ageMillis * 0.0012;
-                    double ox, oy, oz;
-                    if (projectile) {
-                        double spread = 0.05 + unit(seed >>> 7) * 0.13;
-                        double angle = unit(seed >>> 17) * Math.PI * 2.0;
-                        ox = Math.cos(angle) * spread + Math.sin(phase) * 0.018;
-                        oz = Math.sin(angle) * spread + Math.cos(phase * 0.91) * 0.018;
-                        oy = signed(seed >>> 22) * spread + Math.sin(phase * 0.73) * 0.018;
-                    } else {
-                        ox = signed(seed >>> 5) * 0.09 + Math.sin(phase) * 0.014;
-                        oz = signed(seed >>> 13) * 0.09 + Math.cos(phase * 0.87) * 0.014;
-                        oy = 0.18 + unit(seed >>> 21) * 1.18 + Math.sin(phase * 0.71) * 0.02;
-                    }
-                    Vec3d position = point.position.add(ox, oy, oz).subtract(camera);
-                    float pulse = 0.88f + 0.12f * (float) Math.sin(now * 0.006 + seed);
-                    float size = (projectile ? 0.095f : 0.14f) * pulse;
-                    int color = color(point, now, profile, Math.min(1.0f, life * 1.4f) * appear);
-                    result.add(new ParticleView(position, form, texture, color, size,
-                            (seed & 359) + now * 0.018f));
-                }
-            }
+        for (TrailParticle particle : trailParticles) {
+            if ((particle.target == Target.PROJECTILE) != projectile) continue;
+            if (particle.target == Target.LOCAL_PLAYER && !firstPerson.c()
+                    && mc.options.getPerspective().isFirstPerson()) continue;
+            float age = Math.max(0.0f, (float) (now - particle.created));
+            float progress = Math.min(1.0f, age / particle.lifetime);
+            float appear = smooth(Math.min(1.0f, age / 120.0f));
+            float disappear = 1.0f - smooth(progress);
+            float alpha = appear * disappear * profile.opacity.c();
+            if (alpha <= 0.002f) continue;
+            int color = applyAlpha(profile.color.c(), alpha);
+            float pulse = 0.94f + 0.06f * (float) Math.sin(age * 0.012 + particle.rotationZ);
+            result.add(new ParticleView(particle.position.subtract(camera), particle.form, particle.texture,
+                    color, particle.size * pulse, particle.rotationX, particle.rotationY, particle.rotationZ));
         }
         return result;
-    }
-
-    private static int mix(int seed, int index) {
-        int value = seed ^ (index * 0x9E3779B9);
-        value ^= value >>> 16;
-        value *= 0x7FEB352D;
-        value ^= value >>> 15;
-        return value;
     }
 
     private void drawParticleShapes(MatrixStack matrices, List<ParticleView> views, int form) {
@@ -433,8 +479,9 @@ public final class Trails extends Module {
     }
 
     private static void rotateShape(MatrixStack matrices, ParticleView view) {
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(view.rotation * 0.73f));
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(view.rotation));
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(view.rotationX));
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(view.rotationY));
+        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(view.rotationZ));
     }
 
     private int[] enabledForms(MultiModeSetting setting) {
@@ -534,6 +581,13 @@ public final class Trails extends Module {
         vertex(buffer, matrix, a, ca); vertex(buffer, matrix, b, cb);
     }
 
+    private static void coloredQuad(BufferBuilder buffer, Matrix4f matrix,
+                                    Vec3d a, Vec3d b, Vec3d c, Vec3d d,
+                                    int ca, int cb, int cc, int cd) {
+        vertex(buffer, matrix, a, ca); vertex(buffer, matrix, b, cb);
+        vertex(buffer, matrix, c, cc); vertex(buffer, matrix, d, cd);
+    }
+
     private static void vertex(BufferBuilder buffer, Matrix4f matrix, Vec3d point, int color) {
         buffer.vertex(matrix, (float) point.x, (float) point.y, (float) point.z).color(color);
     }
@@ -607,11 +661,52 @@ public final class Trails extends Module {
         final List<Point> points = new ArrayList<>();
         Target target;
         long lastSeen;
+        double emissionCarry;
         Trail(Target target) { this.target = target; }
     }
 
+    private static final class TrailParticle {
+        Vec3d position;
+        Vec3d velocity;
+        final Target target;
+        final int form, texture;
+        final long created, lifetime;
+        final float size;
+        float rotationX, rotationY, rotationZ;
+        final float spinX, spinY, spinZ;
+
+        TrailParticle(Vec3d position, Vec3d velocity, Target target, int form, int texture,
+                      long created, long lifetime, float size,
+                      float rotationX, float rotationY, float rotationZ,
+                      float spinX, float spinY, float spinZ) {
+            this.position = position;
+            this.velocity = velocity;
+            this.target = target;
+            this.form = form;
+            this.texture = texture;
+            this.created = created;
+            this.lifetime = lifetime;
+            this.size = size;
+            this.rotationX = rotationX;
+            this.rotationY = rotationY;
+            this.rotationZ = rotationZ;
+            this.spinX = spinX;
+            this.spinY = spinY;
+            this.spinZ = spinZ;
+        }
+
+        void tick() {
+            position = position.add(velocity);
+            velocity = velocity.multiply(0.985).add(0.0, 0.00008, 0.0);
+            rotationX += spinX;
+            rotationY += spinY;
+            rotationZ += spinZ;
+        }
+    }
+
     private record Point(Vec3d position, long created, int seed) { }
-    private record ParticleView(Vec3d position, int form, int texture, int color, float size, float rotation) { }
+    private record ParticleView(Vec3d position, int form, int texture, int color, float size,
+                                float rotationX, float rotationY, float rotationZ) { }
     private record Profile(ModeSetting style, ColorSetting color, SliderSetting length,
                            SliderSetting opacity, SliderSetting fade,
                            SliderSetting glow, MultiModeSetting particles) {
