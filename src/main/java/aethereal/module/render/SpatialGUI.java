@@ -5,9 +5,6 @@ import aethereal.core.EventTarget;
 import aethereal.core.Module;
 import aethereal.core.ModuleRegister;
 import aethereal.event.DrawEvent;
-import aethereal.setting.BooleanSetting;
-import aethereal.setting.ModeSetting;
-import aethereal.setting.SliderSetting;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.ShaderProgramKeys;
@@ -23,6 +20,8 @@ import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
@@ -31,49 +30,50 @@ import org.joml.Vector3f;
 
 @ModuleRegister(name = "Spatial GUI", description = "Интерактивный интерфейс-контейнер в пространстве мира", category = Category.Render)
 public final class SpatialGUI extends Module {
-    // The defaults intentionally match Spatial GUI 1.4.
-    private final BooleanSetting firstPersonInventory = new BooleanSetting("От первого лица: инвентарь", false);
-    private final BooleanSetting firstPersonContainers = new BooleanSetting("От первого лица: контейнеры", false);
-    private final BooleanSetting autoScaleByFov = new BooleanSetting("Масштаб по FOV", true);
-    private final BooleanSetting mirrorThirdPerson = new BooleanSetting("Зеркальный вид", false);
-    private final BooleanSetting linearFiltering = new BooleanSetting("Линейная фильтрация", true);
-    private final SliderSetting screenAlpha = new SliderSetting("Прозрачность экрана", 255.0f, 0.0f, 255.0f, 1.0f);
+    // Fixed values loaded from the supplied config/spatial-gui.json.
+    // Spatial GUI intentionally exposes no per-module settings: only its on/off toggle.
+    private static final boolean firstPersonInventory = false;
+    private static final boolean firstPersonContainers = true;
+    private static final boolean autoScaleByFov = true;
+    private static final boolean mirrorThirdPerson = false;
+    private static final boolean linearFiltering = true;
+    private static final float screenAlpha = 255.0f;
 
-    private final SliderSetting screenDistance = new SliderSetting("Экран: расстояние", 2.5f, 0.5f, 6.0f, 0.1f);
-    private final SliderSetting screenSideOffset = new SliderSetting("Экран: смещение вбок", -0.6f, -4.0f, 4.0f, 0.1f);
-    private final SliderSetting screenHeightOffset = new SliderSetting("Экран: высота", -0.4f, -4.0f, 4.0f, 0.1f);
-    private final SliderSetting screenYawOffset = new SliderSetting("Экран: поворот", 160.0f, -180.0f, 180.0f, 1.0f);
-    private final SliderSetting screenPitchOffset = new SliderSetting("Экран: наклон", 0.0f, -90.0f, 90.0f, 1.0f);
-    private final SliderSetting screenScale = new SliderSetting("Экран: масштаб", 3.5f, 0.4f, 8.0f, 0.1f);
+    private static final float screenDistance = 2.5f;
+    private static final float screenSideOffset = -0.6f;
+    private static final float screenHeightOffset = -0.4f;
+    private static final float screenYawOffset = 160.0f;
+    private static final float screenPitchOffset = 0.0f;
+    private static final float screenScale = 3.5f;
 
-    private final SliderSetting firstScreenDistance = new SliderSetting("1P экран: расстояние", 1.5f, 0.4f, 4.0f, 0.1f);
-    private final SliderSetting firstScreenSideOffset = new SliderSetting("1P экран: смещение вбок", 0.0f, -3.0f, 3.0f, 0.1f);
-    private final SliderSetting firstScreenHeightOffset = new SliderSetting("1P экран: высота", 0.0f, -3.0f, 3.0f, 0.1f);
-    private final SliderSetting firstScreenYawOffset = new SliderSetting("1P экран: поворот", 180.0f, -180.0f, 180.0f, 1.0f);
-    private final SliderSetting firstScreenPitchOffset = new SliderSetting("1P экран: наклон", 0.0f, -90.0f, 90.0f, 1.0f);
-    private final SliderSetting firstScreenScale = new SliderSetting("1P экран: масштаб", 1.8f, 0.4f, 5.0f, 0.1f);
+    private static final float firstScreenDistance = 1.5f;
+    private static final float firstScreenSideOffset = 0.0f;
+    private static final float firstScreenHeightOffset = 0.0f;
+    private static final float firstScreenYawOffset = 180.0f;
+    private static final float firstScreenPitchOffset = 0.0f;
+    private static final float firstScreenScale = 1.8f;
 
-    private final SliderSetting cameraDistance = new SliderSetting("Камера: расстояние", 1.7f, 0.0f, 4.0f, 0.1f);
-    private final SliderSetting cameraSideOffset = new SliderSetting("Камера: смещение вбок", -1.2f, -4.0f, 4.0f, 0.1f);
-    private final SliderSetting cameraHeightOffset = new SliderSetting("Камера: высота", 1.5f, -2.0f, 5.0f, 0.1f);
-    private final SliderSetting cameraTargetPitch = new SliderSetting("Камера: наклон", 10.0f, -70.0f, 70.0f, 1.0f);
-    private final SliderSetting transitionDuration = new SliderSetting("Переход камеры, мс", 300.0f, 1.0f, 5000.0f, 10.0f);
-    private final SliderSetting transitionSkip = new SliderSetting("Пропуск перехода, %", 15.0f, 0.0f, 100.0f, 1.0f);
-    private final SliderSetting thirdYawSensitivity = new SliderSetting("3P параллакс X", 0.1f, 0.0f, 1.0f, 0.01f);
-    private final SliderSetting thirdPitchSensitivity = new SliderSetting("3P параллакс Y", 0.03f, 0.0f, 0.5f, 0.01f);
-    private final BooleanSetting disableThirdParallax = new BooleanSetting("Отключить 3P параллакс", false);
-    private final SliderSetting firstYawSensitivity = new SliderSetting("1P параллакс X", 0.4f, 0.0f, 1.0f, 0.01f);
-    private final SliderSetting firstPitchSensitivity = new SliderSetting("1P параллакс Y", 0.12f, 0.0f, 0.5f, 0.01f);
-    private final BooleanSetting disableFirstParallax = new BooleanSetting("Отключить 1P параллакс", false);
-    private final SliderSetting firstPitchClamp = new SliderSetting("1P предел наклона", 40.0f, 0.0f, 90.0f, 1.0f);
+    private static final float cameraDistance = 1.7f;
+    private static final float cameraSideOffset = -1.2f;
+    private static final float cameraHeightOffset = 1.5f;
+    private static final float cameraTargetPitch = 10.0f;
+    private static final float transitionDuration = 300.0f;
+    private static final float transitionSkip = 15.0f;
+    private static final float thirdYawSensitivity = 0.1f;
+    private static final float thirdPitchSensitivity = 0.03f;
+    private static final boolean disableThirdParallax = false;
+    private static final float firstYawSensitivity = 0.4f;
+    private static final float firstPitchSensitivity = 0.12f;
+    private static final boolean disableFirstParallax = false;
+    private static final float firstPitchClamp = 40.0f;
 
-    private final BooleanSetting fadeAnimation = new BooleanSetting("Плавное появление", true);
-    private final SliderSetting fadeDuration = new SliderSetting("Появление, мс", 150.0f, 0.0f, 1000.0f, 10.0f);
-    private final BooleanSetting scaleAnimation = new BooleanSetting("Анимация масштаба", true);
-    private final SliderSetting openDuration = new SliderSetting("Открытие, мс", 300.0f, 50.0f, 1000.0f, 10.0f);
-    private final SliderSetting closeDuration = new SliderSetting("Закрытие, мс", 220.0f, 50.0f, 1000.0f, 10.0f);
-    private final ModeSetting easing = new ModeSetting("Тип анимации", "Back", "Cubic", "Elastic", "Bounce", "Back", "Exponential", "Quadratic", "Quartic");
-    private final SliderSetting animationStartScale = new SliderSetting("Начальный масштаб, %", 75.0f, 1.0f, 100.0f, 1.0f);
+    private static final boolean fadeAnimation = true;
+    private static final float fadeDuration = 150.0f;
+    private static final boolean scaleAnimation = true;
+    private static final float openDuration = 300.0f;
+    private static final float closeDuration = 220.0f;
+    private static final String animationEasing = "Back";
+    private static final float animationStartScale = 75.0f;
 
     private SimpleFramebuffer target;
     private Screen activeScreen;
@@ -89,18 +89,6 @@ public final class SpatialGUI extends Module {
     private double rawMouseX;
     private double rawMouseY;
     private PlaneBasis planeBasis;
-
-    public SpatialGUI() {
-        a(firstPersonInventory, firstPersonContainers, autoScaleByFov, mirrorThirdPerson,
-                linearFiltering, screenAlpha,
-                screenDistance, screenSideOffset, screenHeightOffset, screenYawOffset, screenPitchOffset, screenScale,
-                firstScreenDistance, firstScreenSideOffset, firstScreenHeightOffset, firstScreenYawOffset,
-                firstScreenPitchOffset, firstScreenScale,
-                cameraDistance, cameraSideOffset, cameraHeightOffset, cameraTargetPitch,
-                transitionDuration, transitionSkip, thirdYawSensitivity, thirdPitchSensitivity,
-                disableThirdParallax, firstYawSensitivity, firstPitchSensitivity, disableFirstParallax, firstPitchClamp,
-                fadeAnimation, fadeDuration, scaleAnimation, openDuration, closeDuration, easing, animationStartScale);
-    }
 
     @Override
     public void b() {
@@ -123,8 +111,13 @@ public final class SpatialGUI extends Module {
         return isActive() && !isFirstPerson();
     }
 
+    public boolean shouldHideFirstPersonItem(ItemStack stack) {
+        // Supplied config: hideHandsInFirstPerson=false, hideShieldInFirstPerson=true.
+        return isActive() && isFirstPerson() && stack != null && stack.isOf(Items.SHIELD);
+    }
+
     private boolean isFirstPerson() {
-        return inventoryScreen ? firstPersonInventory.c() : firstPersonContainers.c();
+        return inventoryScreen ? firstPersonInventory : firstPersonContainers;
     }
 
     private void ensureScreen(Screen screen) {
@@ -152,7 +145,7 @@ public final class SpatialGUI extends Module {
         if (target == null) target = new SimpleFramebuffer(framebufferWidth, framebufferHeight, true);
         else if (target.textureWidth != framebufferWidth || target.textureHeight != framebufferHeight)
             target.resize(framebufferWidth, framebufferHeight);
-        target.setTexFilter(linearFiltering.c() ? 9729 : 9728);
+        target.setTexFilter(linearFiltering ? 9729 : 9728);
         target.setClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         target.clear();
         target.beginWrite(true);
@@ -189,18 +182,18 @@ public final class SpatialGUI extends Module {
                 MathHelper.lerp(tickDelta, mc.player.prevZ, mc.player.getZ()));
         boolean firstPerson = isFirstPerson();
         float playerYaw = mc.player.getYaw(tickDelta);
-        float playerPitch = MathHelper.clamp(mc.player.getPitch(tickDelta), -firstPitchClamp.c(), firstPitchClamp.c());
+        float playerPitch = MathHelper.clamp(mc.player.getPitch(tickDelta), -firstPitchClamp, firstPitchClamp);
         float yawRad = (float) Math.toRadians(playerYaw);
         float pitchRad = firstPerson ? (float) Math.toRadians(playerPitch) : 0.0f;
-        float distance = firstPerson ? firstScreenDistance.c() : screenDistance.c();
-        float side = firstPerson ? firstScreenSideOffset.c() : screenSideOffset.c();
-        if (!firstPerson && mirrorThirdPerson.c()) side = -side;
-        float height = firstPerson ? firstScreenHeightOffset.c() : screenHeightOffset.c();
-        float yawOffset = firstPerson ? firstScreenYawOffset.c() : screenYawOffset.c();
-        if (!firstPerson && mirrorThirdPerson.c()) yawOffset = -yawOffset;
-        float pitchOffset = firstPerson ? firstScreenPitchOffset.c() : screenPitchOffset.c();
-        float configuredScale = firstPerson ? firstScreenScale.c() : screenScale.c();
-        float fovScale = autoScaleByFov.c() ? (float) Math.pow(currentFov() / 70.0f, 1.2f) : 1.0f;
+        float distance = firstPerson ? firstScreenDistance : screenDistance;
+        float side = firstPerson ? firstScreenSideOffset : screenSideOffset;
+        if (!firstPerson && mirrorThirdPerson) side = -side;
+        float height = firstPerson ? firstScreenHeightOffset : screenHeightOffset;
+        float yawOffset = firstPerson ? firstScreenYawOffset : screenYawOffset;
+        if (!firstPerson && mirrorThirdPerson) yawOffset = -yawOffset;
+        float pitchOffset = firstPerson ? firstScreenPitchOffset : screenPitchOffset;
+        float configuredScale = firstPerson ? firstScreenScale : screenScale;
+        float fovScale = autoScaleByFov ? (float) Math.pow(currentFov() / 70.0f, 1.2f) : 1.0f;
         if (!firstPerson) fovScale = 1.0f + (fovScale - 1.0f) * 0.82f;
         float animatedScale = configuredScale * fovScale * animatedScale();
 
@@ -239,7 +232,7 @@ public final class SpatialGUI extends Module {
             RenderSystem.depthMask(false);
             RenderSystem.setShader(ShaderProgramKeys.POSITION_TEX_COLOR);
             RenderSystem.setShaderTexture(0, target.getColorAttachment());
-            float alpha = MathHelper.clamp(screenAlpha.c() / 255.0f, 0.0f, 1.0f) * fadeAlpha();
+            float alpha = MathHelper.clamp(screenAlpha / 255.0f, 0.0f, 1.0f) * fadeAlpha();
             int color = ((int) (alpha * 255.0f) << 24) | 0x00FFFFFF;
             float halfWidth = aspect * 0.5f;
             Matrix4f matrix = matrices.peek().getPositionMatrix();
@@ -267,30 +260,30 @@ public final class SpatialGUI extends Module {
         float normX = MathHelper.clamp((float) (mouseX / Math.max(1, mc.getWindow().getWidth()) * 2.0 - 1.0), -1.0f, 1.0f);
         float normY = MathHelper.clamp((float) (mouseY / Math.max(1, mc.getWindow().getHeight()) * 2.0 - 1.0), -1.0f, 1.0f);
         float yawOffset = firstPerson
-                ? (disableFirstParallax.c() ? 0.0f : normX * 90.0f * firstYawSensitivity.c())
-                : (disableThirdParallax.c() ? 0.0f : normX * 90.0f * thirdYawSensitivity.c());
+                ? (disableFirstParallax ? 0.0f : normX * 90.0f * firstYawSensitivity)
+                : (disableThirdParallax ? 0.0f : normX * 90.0f * thirdYawSensitivity);
         float pitchOffset = firstPerson
-                ? (disableFirstParallax.c() ? 0.0f : normY * 180.0f * firstPitchSensitivity.c())
-                : (disableThirdParallax.c() ? 0.0f : normY * 180.0f * thirdPitchSensitivity.c());
+                ? (disableFirstParallax ? 0.0f : normY * 180.0f * firstPitchSensitivity)
+                : (disableThirdParallax ? 0.0f : normY * 180.0f * thirdPitchSensitivity);
         float yaw = entity.getYaw(tickDelta) + yawOffset;
         float pitch = firstPerson
                 ? MathHelper.clamp(entity.getPitch(tickDelta) + pitchOffset, -90.0f, 90.0f)
-                : cameraTargetPitch.c() + pitchOffset;
+                : cameraTargetPitch + pitchOffset;
         float positionYaw = entity.getYaw(tickDelta);
         float yawRad = (float) Math.toRadians(positionYaw);
         Vec3d entityPos = new Vec3d(MathHelper.lerp(tickDelta, entity.prevX, entity.getX()),
                 MathHelper.lerp(tickDelta, entity.prevY, entity.getY()),
                 MathHelper.lerp(tickDelta, entity.prevZ, entity.getZ()));
-        float distance = firstPerson ? 0.0f : cameraDistance.c();
-        float side = firstPerson ? 0.0f : cameraSideOffset.c();
-        if (!firstPerson && mirrorThirdPerson.c()) side = -side;
-        float height = firstPerson ? entity.getEyeHeight(entity.getPose()) : cameraHeightOffset.c();
+        float distance = firstPerson ? 0.0f : cameraDistance;
+        float side = firstPerson ? 0.0f : cameraSideOffset;
+        if (!firstPerson && mirrorThirdPerson) side = -side;
+        float height = firstPerson ? entity.getEyeHeight(entity.getPose()) : cameraHeightOffset;
         Vec3d targetPos = entityPos.add(Math.sin(yawRad) * distance + Math.cos(yawRad) * side,
                 height, -Math.cos(yawRad) * distance + Math.sin(yawRad) * side);
         if (firstPerson) return new CameraTransform(targetPos, yaw, pitch);
 
-        float duration = Math.max(1.0f, transitionDuration.c());
-        float elapsed = System.currentTimeMillis() - cameraTransitionStart + duration * transitionSkip.c() / 100.0f;
+        float duration = Math.max(1.0f, transitionDuration);
+        float elapsed = System.currentTimeMillis() - cameraTransitionStart + duration * transitionSkip / 100.0f;
         float progress = MathHelper.clamp(elapsed / duration, 0.0f, 1.0f);
         float eased = 1.0f - (float) Math.pow(1.0f - progress, 3.0);
         Vec3d start = cameraStart == null ? camera.getPos() : cameraStart;
@@ -324,8 +317,11 @@ public final class SpatialGUI extends Module {
         Camera camera = mc.gameRenderer.getCamera();
         int guiWidth = mc.getWindow().getScaledWidth();
         int guiHeight = mc.getWindow().getScaledHeight();
-        double ndcX = guiX / Math.max(1.0, guiWidth) * 2.0 - 1.0;
-        double ndcY = 1.0 - guiY / Math.max(1.0, guiHeight) * 2.0;
+        // The supplied config uses the screen crosshair in first-person mode.
+        double rayX = isFirstPerson() ? guiWidth * 0.5 : guiX;
+        double rayY = isFirstPerson() ? guiHeight * 0.5 : guiY;
+        double ndcX = rayX / Math.max(1.0, guiWidth) * 2.0 - 1.0;
+        double ndcY = 1.0 - rayY / Math.max(1.0, guiHeight) * 2.0;
         float yaw = (float) Math.toRadians(camera.getYaw());
         float pitch = (float) Math.toRadians(camera.getPitch());
         Vec3d forward = new Vec3d(-Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).normalize();
@@ -358,41 +354,41 @@ public final class SpatialGUI extends Module {
     }
 
     private float animatedScale() {
-        if (!scaleAnimation.c()) return 1.0f;
+        if (!scaleAnimation) return 1.0f;
         float progress = closing ? closeProgress() : openProgress();
-        float start = animationStartScale.c() / 100.0f;
+        float start = animationStartScale / 100.0f;
         return start + (1.0f - start) * ease(progress);
     }
 
     private float fadeAlpha() {
-        if (!fadeAnimation.c()) return closing ? closeProgress() : 1.0f;
-        float open = fadeDuration.c() <= 0.0f ? 1.0f
-                : MathHelper.clamp((System.currentTimeMillis() - openTime) / fadeDuration.c(), 0.0f, 1.0f);
+        if (!fadeAnimation) return closing ? closeProgress() : 1.0f;
+        float open = fadeDuration <= 0.0f ? 1.0f
+                : MathHelper.clamp((System.currentTimeMillis() - openTime) / fadeDuration, 0.0f, 1.0f);
         return closing ? Math.min(open, closeProgress()) : open;
     }
 
     private float openProgress() {
-        return MathHelper.clamp((System.currentTimeMillis() - openTime) / Math.max(1.0f, openDuration.c()), 0.0f, 1.0f);
+        return MathHelper.clamp((System.currentTimeMillis() - openTime) / Math.max(1.0f, openDuration), 0.0f, 1.0f);
     }
 
     private float closeProgress() {
-        return closing ? 1.0f - MathHelper.clamp((System.currentTimeMillis() - closeTime) / Math.max(1.0f, closeDuration.c()), 0.0f, 1.0f) : 1.0f;
+        return closing ? 1.0f - MathHelper.clamp((System.currentTimeMillis() - closeTime) / Math.max(1.0f, closeDuration), 0.0f, 1.0f) : 1.0f;
     }
 
     private float ease(float value) {
         value = MathHelper.clamp(value, 0.0f, 1.0f);
-        if (easing.l("Back")) {
+        if (animationEasing.equals("Back")) {
             float p = value - 1.0f;
             return 1.0f + 2.70158f * p * p * p + 1.70158f * p * p;
         }
-        if (easing.l("Elastic")) {
+        if (animationEasing.equals("Elastic")) {
             if (value == 0.0f || value == 1.0f) return value;
             return (float) (Math.pow(2.0, -10.0 * value) * Math.sin((value * 10.0 - 0.75) * (2.0 * Math.PI / 3.0)) + 1.0);
         }
-        if (easing.l("Bounce")) return bounce(value);
-        if (easing.l("Exponential")) return value == 0.0f ? 0.0f : 1.0f - (float) Math.pow(2.0, -10.0 * value);
-        if (easing.l("Quadratic")) return 1.0f - (1.0f - value) * (1.0f - value);
-        if (easing.l("Quartic")) return 1.0f - (float) Math.pow(1.0f - value, 4.0);
+        if (animationEasing.equals("Bounce")) return bounce(value);
+        if (animationEasing.equals("Exponential")) return value == 0.0f ? 0.0f : 1.0f - (float) Math.pow(2.0, -10.0 * value);
+        if (animationEasing.equals("Quadratic")) return 1.0f - (1.0f - value) * (1.0f - value);
+        if (animationEasing.equals("Quartic")) return 1.0f - (float) Math.pow(1.0f - value, 4.0);
         return 1.0f - (float) Math.pow(1.0f - value, 3.0);
     }
 

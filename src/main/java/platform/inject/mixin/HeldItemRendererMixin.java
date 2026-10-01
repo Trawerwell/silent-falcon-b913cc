@@ -46,6 +46,16 @@ public class HeldItemRendererMixin {
         return Look.b();
     }
 
+    @Inject(method = {"renderFirstPersonItem"}, at = {@At("HEAD")}, cancellable = true)
+    private void primordial$spatialHideShield(AbstractClientPlayerEntity player, float tickDelta, float pitch,
+                                               Hand hand, float swingProgress, ItemStack stack, float equipProgress,
+                                               MatrixStack matrices, VertexConsumerProvider vertexConsumers,
+                                               int light, CallbackInfo ci) {
+        if (Primordial.getInstance().getModuleProcessor().t().getSpatialGUI().shouldHideFirstPersonItem(stack)) {
+            ci.cancel();
+        }
+    }
+
     @WrapOperation(method = {"renderFirstPersonItem"}, at = {@At(value = "INVOKE", target = "Lnet/minecraft/client/render/item/HeldItemRenderer;swingArm(FFLnet/minecraft/client/util/math/MatrixStack;ILnet/minecraft/util/Arm;)V", ordinal = 2)})
     private void wrapHandAnimation(HeldItemRenderer instance, float swingProgress, float equipProgress, MatrixStack matrices, int armX, Arm arm, Operation<Void> original, @Local(ordinal = 0, argsOnly = true) Hand hand) {
         HandAnimationEvent event = new HandAnimationEvent(matrices, hand, swingProgress, armX);
