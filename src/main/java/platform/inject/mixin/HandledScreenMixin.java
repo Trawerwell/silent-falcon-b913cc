@@ -10,9 +10,11 @@ import aethereal.lib.javassist.TokenId;
 import aethereal.mixin.ISlot;
 import aethereal.module.misc.AutoBuy;
 import aethereal.module.player.ItemScroller;
+import aethereal.module.render.SpatialGUI;
 import aethereal.render.Animations;
 import aethereal.ui.screen.SwapScreen;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.item.Item;
@@ -32,6 +34,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import platform.inject.accessors.HandledScreenAccessor;
@@ -51,6 +54,8 @@ public abstract class HandledScreenMixin<T extends ScreenHandler> {
     private ButtonWidget buttonDrop;
     @Unique
     private int chestSize;
+    @Unique
+    private boolean primordial$spatialGuiPushed;
 
     @Inject(method = {"drawSlot"}, at = {@At("HEAD")})
     private void onDrawSlotHead(DrawContext context, Slot slot, CallbackInfo ci) {
@@ -204,6 +209,10 @@ public abstract class HandledScreenMixin<T extends ScreenHandler> {
 
     @Inject(method = {"render"}, at = {@At("HEAD")})
     private void onRender(DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+        SpatialGUI spatialGUI = Primordial.getInstance().getModuleProcessor().t().getSpatialGUI();
+        ScreenAccessor screen = (ScreenAccessor) this;
+        this.primordial$spatialGuiPushed = spatialGUI.begin(context, (Screen) (Object) this,
+                screen.getWidth(), screen.getHeight(), mouseX, mouseY, delta);
         if (this.buttonFold != null) {
             this.buttonFold.active = this.handler.slots.subList(this.chestSize, this.handler.slots.size()).stream().anyMatch(this::hasStack);
         }
@@ -219,8 +228,32 @@ public abstract class HandledScreenMixin<T extends ScreenHandler> {
         }
     }
 
+    @ModifyVariable(method = "render", at = @At("HEAD"), argsOnly = true, ordinal = 0)
+    private int primordial$spatialMouseX(int mouseX) {
+        return Primordial.getInstance().getModuleProcessor().t().getSpatialGUI().mapMouseX(mouseX);
+    }
+
+    @ModifyVariable(method = "render", at = @At("HEAD"), argsOnly = true, ordinal = 1)
+    private int primordial$spatialMouseY(int mouseY) {
+        return Primordial.getInstance().getModuleProcessor().t().getSpatialGUI().mapMouseY(mouseY);
+    }
+
+    @ModifyVariable(method = "mouseClicked", at = @At("HEAD"), argsOnly = true, ordinal = 0, require = 0)
+    private double primordial$spatialClickX(double mouseX) {
+        return Primordial.getInstance().getModuleProcessor().t().getSpatialGUI().mapMouseX(mouseX);
+    }
+
+    @ModifyVariable(method = "mouseClicked", at = @At("HEAD"), argsOnly = true, ordinal = 1, require = 0)
+    private double primordial$spatialClickY(double mouseY) {
+        return Primordial.getInstance().getModuleProcessor().t().getSpatialGUI().mapMouseY(mouseY);
+    }
+
     @Inject(method = {"render"}, at = {@At("TAIL")})
     private void onRenderTail(DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo ci) {
         EventManager.a(new ContainerEvent((HandledScreen<?>) (Object) this, context, mouseX, mouseY, ContainerEvent.Phase.POST));
+        if (this.primordial$spatialGuiPushed) {
+            Primordial.getInstance().getModuleProcessor().t().getSpatialGUI().end(context);
+            this.primordial$spatialGuiPushed = false;
+        }
     }
 }

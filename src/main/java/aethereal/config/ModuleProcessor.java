@@ -92,6 +92,7 @@ public class ModuleProcessor extends ConfigProcessor<Module> {
     private final JumpCircle jumpCircle = new JumpCircle();
     private final LineGlyphes lineGlyphes = new LineGlyphes();
     private final Trails trails = new Trails();
+    private final SpatialGUI spatialGUI = new SpatialGUI();
     private final BlockESP ab = new BlockESP();
     private final NoFriendDamage ac = new NoFriendDamage();
     private final ShaderESP ad = new ShaderESP();
@@ -173,7 +174,7 @@ public class ModuleProcessor extends ConfigProcessor<Module> {
                 this.K, this.o, this.E, this.ae, this.v, this.ac, this.af, this.T, this.ai, this.ab, this.aa, this.O,
                 this.p, this.w, this.bd, this.at, this.au, this.aB, this.aO, this.e, this.aN, this.aP, this.aU, this.aV,
                 this.aW, this.aX, this.aZ, this.ba, this.bb, this.Y, this.be, this.bA, this.customSky,
-                this.worldParticles, this.jumpCircle, this.lineGlyphes, this.trails);
+                this.worldParticles, this.jumpCircle, this.lineGlyphes, this.trails, this.spatialGUI);
 
         super.setup();
     }
@@ -928,6 +929,10 @@ public class ModuleProcessor extends ConfigProcessor<Module> {
             return configFile.delete();
         }
         return false;
+    }
+
+    public SpatialGUI getSpatialGUI() {
+        return this.spatialGUI;
     }
 
     private void a(Module... modules) {

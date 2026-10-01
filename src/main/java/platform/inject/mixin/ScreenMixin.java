@@ -5,12 +5,14 @@ import aethereal.core.Primordial;
 import aethereal.core.EventManager;
 import aethereal.core.Interface;
 import aethereal.event.TooltipEvent;
+import aethereal.module.render.SpatialGUI;
 import aethereal.ui.screen.PrimordialMenuStyle;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.DownloadingTerrainScreen;
 import net.minecraft.client.gui.screen.ReconfiguringScreen;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
@@ -43,6 +45,14 @@ public class ScreenMixin {
         Screen screen = (Screen) (Object) this;
         PrimordialMenuStyle.drawBackground(context, screen.width, screen.height, 0, 0);
         ci.cancel();
+    }
+
+    @Inject(method = "close", at = @At("HEAD"), cancellable = true)
+    private void primordial$spatialClose(CallbackInfo ci) {
+        Screen self = (Screen) (Object) this;
+        if (!(self instanceof HandledScreen<?>)) return;
+        SpatialGUI spatialGUI = Primordial.getInstance().getModuleProcessor().t().getSpatialGUI();
+        if (spatialGUI.requestClose(self)) ci.cancel();
     }
 
     @Inject(method = {"getTooltipFromItem"}, at = {@At("RETURN")})
