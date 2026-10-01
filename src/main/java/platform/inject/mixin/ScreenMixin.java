@@ -47,6 +47,12 @@ public class ScreenMixin {
         ci.cancel();
     }
 
+    @Inject(method = "renderBackground(Lnet/minecraft/client/gui/DrawContext;IIF)V", at = @At("HEAD"), cancellable = true, require = 0)
+    private void primordial$spatialBackground(DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+        SpatialGUI spatialGUI = Primordial.getInstance().getModuleProcessor().t().getSpatialGUI();
+        if (spatialGUI.isCapturing()) ci.cancel();
+    }
+
     @Inject(method = "close", at = @At("HEAD"), cancellable = true)
     private void primordial$spatialClose(CallbackInfo ci) {
         Screen self = (Screen) (Object) this;

@@ -6,6 +6,7 @@ import aethereal.core.EventManager;
 import aethereal.event.CameraPositionEvent;
 import aethereal.event.RemovalsEvent;
 import aethereal.event.RotationEvent;
+import aethereal.module.render.SpatialGUI;
 import aethereal.render.Animations;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import net.minecraft.block.enums.CameraSubmersionType;
@@ -24,7 +25,8 @@ import platform.inject.accessors.CameraAccessor;
 public abstract class CameraMixin {
     @ModifyReturnValue(method = {"isThirdPerson"}, at = {@At("RETURN")})
     private boolean isThirdPerson(boolean original) {
-        if (Primordial.getInstance().getModuleProcessor().t().h().m()) {
+        SpatialGUI spatialGUI = Primordial.getInstance().getModuleProcessor().t().getSpatialGUI();
+        if (Primordial.getInstance().getModuleProcessor().t().h().m() || spatialGUI.isThirdPersonMode()) {
             return true;
         }
         return original;
@@ -42,6 +44,16 @@ public abstract class CameraMixin {
         RotationEvent event = new RotationEvent(focusedEntity.getYaw(tickDelta), focusedEntity.getPitch(tickDelta));
         EventManager.a(event);
         ((CameraAccessor) this).invokeSetRotation(event.yaw, event.pitch);
+    }
+
+    @Inject(method = {"update"}, at = {@At("TAIL")})
+    private void primordial$spatialCamera(BlockView area, Entity focusedEntity, boolean thirdPerson,
+                                           boolean inverseView, float tickDelta, CallbackInfo ci) {
+        SpatialGUI spatialGUI = Primordial.getInstance().getModuleProcessor().t().getSpatialGUI();
+        SpatialGUI.CameraTransform transform = spatialGUI.getCameraTransform((Camera) (Object) this, focusedEntity, tickDelta);
+        if (transform == null) return;
+        ((CameraAccessor) this).invokeSetPos(transform.pos().x, transform.pos().y, transform.pos().z);
+        ((CameraAccessor) this).invokeSetRotation(transform.yaw(), transform.pitch());
     }
 
     @Inject(method = {"getSubmersionType"}, at = {@At("HEAD")}, cancellable = true)
