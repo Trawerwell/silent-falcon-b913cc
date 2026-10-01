@@ -112,8 +112,11 @@ public final class SpatialGUI extends Module {
     }
 
     public boolean shouldHideFirstPersonItem(ItemStack stack) {
+        if (!isActive()) return false;
+        // A third-person Spatial GUI camera must never retain the vanilla first-person hand overlay.
+        if (!isFirstPerson()) return true;
         // Supplied config: hideHandsInFirstPerson=false, hideShieldInFirstPerson=true.
-        return isActive() && isFirstPerson() && stack != null && stack.isOf(Items.SHIELD);
+        return stack != null && stack.isOf(Items.SHIELD);
     }
 
     private boolean isFirstPerson() {
